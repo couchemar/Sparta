@@ -15,6 +15,8 @@ defmodule Sparta.MixProject do
   #
   # Run "mix help deps" for examples and options.
   defp deps do
-    []
+    [
+      {:exsync, "~> 0.2.3", only: :dev},
+    ]
   end
 end
