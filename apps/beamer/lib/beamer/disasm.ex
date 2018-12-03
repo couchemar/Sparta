@@ -1,6 +1,5 @@
-defmodule Beamer.Disam do
-
-  defmodule Beamer.Disam.Info do
+defmodule Beamer.Disasm do
+  defmodule Beamer.Disasm.Info do
     defstruct ~w(
       module
       funcs
@@ -9,13 +8,17 @@ defmodule Beamer.Disam do
   end
 
   def file(beamfile) do
-    {:beam_file, module, _, meta1, meta2, funcs}= :beam_disasm.file(beamfile)
+    case beamfile |> String.to_charlist() |> :beam_disasm.file() do
+      {:beam_file, module, _, meta1, meta2, funcs} ->
+        {:ok,
+         %Beamer.Disasm.Info{
+           module: module,
+           meta: meta1 ++ meta2,
+           funcs: funcs
+         }}
 
-    %Beamer.Disam.Info{
-      module: module,
-      meta: meta1 ++ meta2,
-      funcs: funcs
-    }
+      {:error, :beam_lib, {:file_error, _, :enoent}} ->
+        {:error, :not_a_beam_file, beamfile}
+    end
   end
-
 end
