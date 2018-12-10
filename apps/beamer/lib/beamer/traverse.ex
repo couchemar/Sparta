@@ -1,79 +1,90 @@
 defmodule Beamer.Traverse do
   def traverse(modules) when is_list(modules) do
-    graph = :digraph.new()
-
-    for module_info <- modules do
-      traverse(module_info, graph)
-    end
-
-    graph
+    Enum.reduce(modules, {:digraph.new(), MapSet.new()}, fn m, acc -> traverse(m, acc) end)
   end
 
   def traverse(module_info) do
-    traverse(module_info, :digraph.new())
+    traverse(module_info, {:digraph.new(), MapSet.new()})
   end
 
-  defp traverse(module_info, graph) do
-    do_traverse(module_info.funcs, module_info.module, graph)
+  defp traverse(module_info, acc) do
+    do_traverse(module_info.funcs, module_info.module, acc)
   end
 
-  defp do_traverse(funcs, module, graph) do
-    do_funcs(funcs, module, graph)
+  defp do_traverse(funcs, module, acc) do
+    do_funcs(funcs, module, acc)
   end
 
-  defp do_funcs([], _module, graph), do: graph
+  defp do_funcs([], _module, acc), do: acc
 
-  defp do_funcs([func | funcs], module, graph) do
+  defp do_funcs([func | funcs], module, {graph, _} = acc) do
     {:function, name, arity, _line, instrs} = func
     full_name = {module, name, arity}
     _v = :digraph.add_vertex(graph, full_name, [:self])
-    graph1 = do_instrs(instrs, full_name, graph)
-    do_funcs(funcs, module, graph1)
+    acc = do_instrs(instrs, full_name, acc)
+    do_funcs(funcs, module, acc)
   end
 
-  defp do_instrs([], _ctx, graph), do: graph
+  defp do_instrs(instrs, ctx, acc) do
+    Enum.reduce(
+      instrs,
+      acc,
+      fn instr, {graph, not_known} ->
+        case i(instr) do
+          :unknown ->
+            {graph, not_known |> MapSet.put(instr)}
 
-  defp do_instrs([instr | instrs], ctx, graph) do
-    graph1 = i(instr, ctx, graph)
-    do_instrs(instrs, ctx, graph1)
+          nil ->
+            acc
+
+          cont ->
+            graph = cont.(instr, ctx, graph)
+            {graph, not_known}
+        end
+      end
+    )
   end
 
-  defp i({:label, _}, _ctx, graph), do: graph
-  defp i({:line, _}, _ctx, graph), do: graph
+  defp i({:label, _}), do: nil
+  defp i({:line, _}), do: nil
 
-  defp i(
-         {:func_info, {:atom, module}, {:atom, func}, arity},
-         {module, func, arity},
-         graph
-       ),
-       do: graph
+  defp i({:func_info, {:atom, _module}, {:atom, _func}, _arity}),
+    do: nil
 
-  defp i({:test, _, _, _}, _ctx, graph), do: graph
-  defp i({:select_val, _, _, _}, _ctx, graph), do: graph
-  defp i({:move, _, _}, _ctx, graph), do: graph
+  defp i({:test, _, _, _}), do: nil
+  defp i({:select_val, _, _, _}), do: nil
+  defp i({:move, _, _}), do: nil
 
-  defp i({:call_ext_only, arity, {:extfunc, module, fun, arity}}, caller, graph) do
-    ext_call({module, fun, arity}, caller, graph)
+  defp i({:call_ext_only, arity, {:extfunc, module, fun, arity}}) do
+    fn _instr, caller, graph ->
+      ext_call({module, fun, arity}, caller, graph)
+    end
   end
 
-  defp i(:return, _ctx, graph), do: graph
-  defp i({:allocate, _, _}, _ctx, graph), do: graph
+  defp i(:return), do: nil
+  defp i({:allocate, _, _}), do: nil
 
-  defp i({:call_ext, arity, {:extfunc, module, fun, arity}}, caller, graph) do
-    ext_call({module, fun, arity}, caller, graph)
+  defp i({:call_ext, arity, {:extfunc, module, fun, arity}}) do
+    fn _instr, caller, graph ->
+      ext_call({module, fun, arity}, caller, graph)
+    end
   end
 
-  defp i({:jump, _}, _ctx, graph), do: graph
-  defp i({:gc_bif, _, _, _, _, _}, _ctx, graph), do: graph
-  defp i({:bs_add, _, _, _}, _ctx, graph), do: graph
-  defp i({:bs_init2, _, _, _, _, _, _}, _ctx, graph), do: graph
-  defp i({:bs_put_string, _, _}, _ctx, graph), do: graph
-  defp i({:bs_put_binary, _, _, _, _, _}, _ctx, graph), do: graph
-  defp i({:put_map_assoc, _, _, _, _, _}, _ctx, graph), do: graph
+  defp i({:jump, _}), do: nil
+  defp i({:gc_bif, _, _, _, _, _}), do: nil
+  defp i({:bs_add, _, _, _}), do: nil
+  defp i({:bs_init2, _, _, _, _, _, _}), do: nil
+  defp i({:bs_put_string, _, _}), do: nil
+  defp i({:bs_put_binary, _, _, _, _, _}), do: nil
+  defp i({:put_map_assoc, _, _, _, _, _}), do: nil
 
-  defp i({:call_ext_last, arity, {:extfunc, module, fun, arity}, _}, caller, graph) do
-    ext_call({module, fun, arity}, caller, graph)
+  defp i({:call_ext_last, arity, {:extfunc, module, fun, arity}, _}) do
+    fn _instr, caller, graph ->
+      ext_call({module, fun, arity}, caller, graph)
+    end
   end
+
+  defp i(_), do: :unknown
 
   defp ext_call(callee, caller, graph) do
     callee = :digraph.add_vertex(graph, callee)
