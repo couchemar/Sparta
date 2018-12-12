@@ -32,7 +32,7 @@ defmodule Beamer.Traverse do
       fn instr, {graph, not_known} ->
         case i(instr) do
           :unknown ->
-            {graph, not_known |> MapSet.put(instr)}
+            {graph, not_known |> MapSet.put({instr, ctx, instrs})}
 
           nil ->
             acc
@@ -84,11 +84,47 @@ defmodule Beamer.Traverse do
     end
   end
 
+  defp i({:call, arity, {module, fun, arity}}) do
+    fn _instr, caller, graph ->
+      int_call({module, fun, arity}, caller, graph)
+    end
+  end
+
+  defp i({:call_only, arity, {module, fun, arity}}) do
+    fn _instr, caller, graph ->
+      int_call({module, fun, arity}, caller, graph)
+    end
+  end
+
+  defp i({:call_last, arity, {module, fun, arity}, _}) do
+    fn _instr, caller, graph ->
+      int_call({module, fun, arity}, caller, graph)
+    end
+  end
+
+  defp i({:case_end, _}), do: nil
+  defp i({:badmatch, _}), do: nil
+  defp i({:put, _}), do: nil
+  defp i({:raise, _, _, _}), do: nil
+  defp i(:if_end), do: nil
+  defp i({:bs_context_to_binary, _}), do: nil
+  defp i({:try_case, _}), do: nil
+  defp i({:try_case_end, _}), do: nil
+  defp i({:apply_last, _, _}), do: nil
+  defp i({:get_tuple_element, _, _, _}), do: nil
+  defp i({:bif, :element, _, _, _}), do: nil
+
   defp i(_), do: :unknown
 
   defp ext_call(callee, caller, graph) do
     callee = :digraph.add_vertex(graph, callee)
     _e = :digraph.add_edge(graph, caller, callee, [:ext_call])
+    graph
+  end
+
+  defp int_call(callee, caller, graph) do
+    callee = :digraph.add_vertex(graph, callee)
+    _e = :digraph.add_edge(graph, caller, callee, [:int_call])
     graph
   end
 end
