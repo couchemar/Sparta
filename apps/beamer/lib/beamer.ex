@@ -20,6 +20,10 @@ defmodule Beamer do
 
   def process(file) do
     info = Disasm.file(file)
-    Traverse.traverse(info)
+    {graph, unknown_code} = Traverse.traverse(info)
+
+    if MapSet.size(unknown_code) > 0 do
+      raise(RuntimeError, unknown_code)
+    end
   end
 end
