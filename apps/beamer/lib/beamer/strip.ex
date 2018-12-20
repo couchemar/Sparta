@@ -6,9 +6,10 @@ defmodule Beamer.Strip do
     [
       &without_isolated/1,
       &without_self_loop/1,
-      &without_multiple_edges_to_same_node/1
+      &without_multiple_edges_to_same_node/1,
+      &only_danger/1
     ]
-    |> Enum.reduce(graph, fn fun, gr -> fun.(gr) end)
+    |> Enum.reduce([], fn fun, acc -> Enum.concat(acc, fun.(graph)) end)
   end
 
   defp without_isolated(graph) do
@@ -22,7 +23,7 @@ defmodule Beamer.Strip do
 
     isolated = MapSet.intersection(no_out, no_in) |> MapSet.to_list()
     true = :digraph.del_vertices(graph, isolated)
-    graph
+    isolated
   end
 
   defp without_self_loop(graph) do
@@ -30,7 +31,7 @@ defmodule Beamer.Strip do
       digraph(graph)[:etab] |> :ets.select([{{:"$1", :"$2", :"$2", :_}, [], [:"$1"]}])
 
     true = :digraph.del_edges(graph, short_loop_edges)
-    graph
+    []
   end
 
   defp without_multiple_edges_to_same_node(graph) do
@@ -43,6 +44,48 @@ defmodule Beamer.Strip do
       |> Enum.reduce([], fn {_k, [_e | rest]}, acc -> Enum.concat(rest, acc) end)
 
     true = :digraph.del_edges(graph, excess_edges)
-    graph
+    []
+  end
+
+  defp only_danger(graph) do
+    danger_modules = [
+      :file
+    ]
+
+    all = graph |> :digraph.vertices() |> MapSet.new()
+
+    on_danger_way =
+      danger_modules
+      |> Stream.flat_map(&find_module_calls(graph, &1))
+      |> Stream.map(&all_on_path(graph, &1))
+      |> Enum.reduce(fn p, acc -> MapSet.union(acc, p) end)
+
+    quite_safe = MapSet.difference(all, on_danger_way) |> MapSet.to_list()
+
+    true = :digraph.del_vertices(graph, quite_safe)
+    quite_safe
+  end
+
+  defp find_module_calls(graph, module) do
+    digraph(graph)[:vtab]
+    |> :ets.select([{{{module, :_, :_}, :_}, [], [:"$_"]}])
+    |> Stream.map(fn {n, _} -> n end)
+  end
+
+  defp all_on_path(graph, to) do
+    :digraph.vertices(graph)
+    |> Enum.reduce(
+      MapSet.new([to]),
+      fn v, acc ->
+        if MapSet.member?(acc, v) do
+          acc
+        else
+          case :digraph.get_path(graph, v, to) do
+            false -> acc
+            path -> MapSet.union(acc, MapSet.new(path))
+          end
+        end
+      end
+    )
   end
 end
