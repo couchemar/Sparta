@@ -7,9 +7,9 @@ defmodule Beamer.Visualize do
     %{conv | node_converter: &node/2} |> Converter.convert(:digraph, node: [shape: :record])
   end
 
-  defp node({module, _fun, _arity} = name, label) do
+  defp node({_module, _fun, _arity} = name, label) do
     label =
-      if module == :file do
+      if :danger in label do
         [{:color, :red}, {:style, :filled} | label]
       else
         label

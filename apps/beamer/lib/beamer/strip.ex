@@ -48,15 +48,13 @@ defmodule Beamer.Strip do
   end
 
   defp only_danger(graph) do
-    danger_modules = [
-      :file
-    ]
+    danger_calls = :persistent_term.get(:beamer)[:danger_calls]
 
     all = graph |> :digraph.vertices() |> MapSet.new()
 
     on_danger_way =
-      danger_modules
-      |> Stream.flat_map(&find_module_calls(graph, &1))
+      danger_calls
+      |> (&find_and_mark_calls(graph, &1, :danger)).()
       |> Stream.map(&all_on_path(graph, &1))
       |> Enum.reduce(fn p, acc -> MapSet.union(acc, p) end)
 
@@ -66,10 +64,17 @@ defmodule Beamer.Strip do
     quite_safe
   end
 
-  defp find_module_calls(graph, module) do
+  defp find_and_mark_calls(graph, calls, mark) do
+    calls_spec =
+      for call <- calls do
+        {{call, :_}, [], [:"$_"]}
+      end
+
     digraph(graph)[:vtab]
-    |> :ets.select([{{{module, :_, :_}, :_}, [], [:"$_"]}])
-    |> Stream.map(fn {n, _} -> n end)
+    |> :ets.select(calls_spec)
+    |> Stream.map(fn {n, l} ->
+      :digraph.add_vertex(graph, n, [mark | l])
+    end)
   end
 
   defp all_on_path(graph, to) do

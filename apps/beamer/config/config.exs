@@ -28,3 +28,14 @@ use Mix.Config
 # here (which is why it is important to import them last).
 #
 #     import_config "#{Mix.env()}.exs"
+
+:persistent_term.put(
+  :beamer,
+  %{
+    danger_calls: [
+      {:file, :_, :_},
+      {:code, :_, :_},
+      {:httpc, :_, :_}
+    ]
+  }
+)
