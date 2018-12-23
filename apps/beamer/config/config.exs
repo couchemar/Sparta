@@ -33,9 +33,11 @@ use Mix.Config
   :beamer,
   %{
     danger_calls: [
-      {:file, :_, :_},
-      {:code, :_, :_},
-      {:httpc, :_, :_}
+      {{:file, :_, :_}, [:io, :file]},
+      {{:code, :_, :_}, []},
+      {{:httpc, :_, :_}, [:io, :http]},
+      {{:io, :_, :_}, [:io]},
+      {{:ssl, :_, :_}, []}
     ]
   }
 )

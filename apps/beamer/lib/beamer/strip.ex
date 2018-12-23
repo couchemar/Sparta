@@ -64,16 +64,23 @@ defmodule Beamer.Strip do
     quite_safe
   end
 
-  defp find_and_mark_calls(graph, calls, mark) do
+  defp find_and_mark_calls(graph, calls, global_mark) do
     calls_spec =
-      for call <- calls do
-        {{call, :_}, [], [:"$_"]}
+      for {call, marks} <- calls do
+        {{call, :_}, [], [[:"$_", marks]]}
       end
 
     digraph(graph)[:vtab]
     |> :ets.select(calls_spec)
-    |> Stream.map(fn {n, l} ->
-      :digraph.add_vertex(graph, n, [mark | l])
+    |> Stream.map(fn [{n, l}, marks] ->
+      l =
+        case marks do
+          [] -> l
+          marks when is_list(marks) -> Enum.concat(l, marks)
+          marks -> [marks | l]
+        end
+
+      :digraph.add_vertex(graph, n, [global_mark | l])
     end)
   end
 
